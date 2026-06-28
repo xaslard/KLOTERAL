@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KLOTERAL — Inklinometer Digital Terintegrasi untuk Keselamatan Jalan</title>
+    <meta name="description" content="KLOTERAL adalah alat ukur kemiringan jalan digital berbasis Arduino yang menggabungkan sensor MPU6050, GPS NEO-6M, OLED, dan LED indikator dalam satu perangkat portabel.">
+    <meta name="keywords" content="inklinometer, kemiringan jalan, keselamatan jalan, Arduino, MPU6050, GPS, KLOTERAL">
+    <meta name="author" content="Tim KLOTERAL">
+    <meta property="og:title" content="KLOTERAL — Satu Alat, Solusi Lengkap untuk Keselamatan Jalan">
+    <meta property="og:description" content="Inklinometer digital terintegrasi dengan GPS, OLED, dan LED peringatan dini. Solusi cerdas untuk pemetaan titik rawan kecelakaan di jalan pegunungan.">
+    <meta property="og:type" content="website">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        surface: { primary: '#0B0C10', secondary: '#0E0F14', card: '#12131A', elevated: '#1A1B26' },
+                        brand: { green: '#10B981', yellow: '#F59E0B', red: '#EF4444', blue: '#6366F1', cyan: '#06B6D4' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0B0C10; color: #fff; font-family: 'Inter', sans-serif; overflow-x: hidden; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0B0C10; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+
+        @keyframes fadeSlideIn {
+            0% { opacity: 0; transform: translateY(30px); filter: blur(8px); }
+            100% { opacity: 1; transform: translateY(0); filter: blur(0); }
+        }
+        @keyframes pulse-glow-green {
+            0%, 100% { box-shadow: 0 0 15px rgba(16,185,129,0.4), inset 0 0 8px rgba(16,185,129,0.3); }
+            50% { box-shadow: 0 0 35px rgba(16,185,129,0.7), inset 0 0 15px rgba(16,185,129,0.5); }
+        }
+        @keyframes pulse-glow-yellow {
+            0%, 100% { box-shadow: 0 0 15px rgba(245,158,11,0.4), inset 0 0 8px rgba(245,158,11,0.3); }
+            50% { box-shadow: 0 0 35px rgba(245,158,11,0.7), inset 0 0 15px rgba(245,158,11,0.5); }
+        }
+        @keyframes pulse-glow-red {
+            0%, 100% { box-shadow: 0 0 15px rgba(239,68,68,0.4), inset 0 0 8px rgba(239,68,68,0.3); }
+            50% { box-shadow: 0 0 35px rgba(239,68,68,0.7), inset 0 0 15px rgba(239,68,68,0.5); }
+        }
+        @keyframes gradient-shift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        @keyframes scan {
+            0% { top: -10%; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 110%; opacity: 0; }
+        }
+
+        .animate-in { animation: fadeSlideIn 0.8s ease-out both; }
+        .animate-in-d1 { animation: fadeSlideIn 0.8s ease-out 0.1s both; }
+        .animate-in-d2 { animation: fadeSlideIn 0.8s ease-out 0.2s both; }
+        .animate-in-d3 { animation: fadeSlideIn 0.8s ease-out 0.3s both; }
+        .animate-in-d4 { animation: fadeSlideIn 0.8s ease-out 0.4s both; }
+        .animate-in-d5 { animation: fadeSlideIn 0.8s ease-out 0.5s both; }
+
+        .reveal { opacity: 0; transform: translateY(30px); transition: all 0.8s ease-out; }
+        .reveal.visible { opacity: 1; transform: translateY(0); }
+        .reveal-d1 { transition-delay: 0.1s; }
+        .reveal-d2 { transition-delay: 0.2s; }
+        .reveal-d3 { transition-delay: 0.3s; }
+        .reveal-d4 { transition-delay: 0.4s; }
+        .reveal-d5 { transition-delay: 0.5s; }
+
+        .gradient-text-green {
+            background: linear-gradient(135deg, #10B981, #06B6D4);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .gradient-text-warm {
+            background: linear-gradient(135deg, #10B981, #F59E0B);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .gradient-text-hero {
+            background: linear-gradient(135deg, #ffffff 0%, #10B981 50%, #06B6D4 100%);
+            background-size: 200% 200%; animation: gradient-shift 6s ease infinite;
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+
+        .glass-card {
+            background: rgba(255,255,255,0.03); backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.08); transition: all 0.4s ease;
+        }
+        .glass-card:hover {
+            background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12); transform: translateY(-4px);
+        }
+
+        /* Device tilt — origin at bottom center so it rocks left/right */
+        .device-tilt-wrapper {
+            transition: transform 1.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            transform-origin: 50% 100%;
+        }
+
+        .device-body {
+            background: linear-gradient(145deg, #1a1b26, #12131a);
+            border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 16px; position: relative; overflow: hidden;
+        }
+        .device-body::before {
+            content: ''; position: absolute; top: -10%; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(16,185,129,0.6), transparent);
+            animation: scan 4s ease-in-out infinite; z-index: 5;
+        }
+
+        .oled-screen {
+            background: #000; border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 6px; font-family: 'JetBrains Mono', monospace;
+            overflow: hidden; position: relative;
+        }
+        .oled-screen::after {
+            content: ''; position: absolute; inset: 0;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px);
+            pointer-events: none;
+        }
+
+        .led-circle {
+            width: 36px; height: 36px; border-radius: 50%;
+            transition: all 0.8s ease; position: relative;
+        }
+        .led-circle.off { opacity: 0.12; box-shadow: none; }
+        .led-circle.on-green { background: #10B981; opacity: 1; animation: pulse-glow-green 2s ease-in-out infinite; }
+        .led-circle.on-yellow { background: #F59E0B; opacity: 1; animation: pulse-glow-yellow 1.5s ease-in-out infinite; }
+        .led-circle.on-red { background: #EF4444; opacity: 1; animation: pulse-glow-red 1s ease-in-out infinite; }
+
+        .led-indicator-bar {
+            height: 14px; border-radius: 7px; transition: all 0.8s ease;
+        }
+        .led-indicator-bar.off { opacity: 0.08; box-shadow: none; }
+        .led-indicator-bar.on-green { background: #10B981; opacity: 1; animation: pulse-glow-green 2s ease-in-out infinite; }
+        .led-indicator-bar.on-yellow { background: #F59E0B; opacity: 1; animation: pulse-glow-yellow 1.5s ease-in-out infinite; }
+        .led-indicator-bar.on-red { background: #EF4444; opacity: 1; animation: pulse-glow-red 1s ease-in-out infinite; }
+
+        .form-input {
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px; padding: 12px 16px; color: #fff;
+            font-family: 'Inter', sans-serif; font-size: 14px;
+            transition: all 0.3s ease; width: 100%; outline: none;
+        }
+        .form-input:focus { border-color: #10B981; box-shadow: 0 0 0 3px rgba(16,185,129,0.15); background: rgba(255,255,255,0.06); }
+        .form-input::placeholder { color: rgba(255,255,255,0.3); }
+        .form-input.error { border-color: #EF4444; box-shadow: 0 0 0 3px rgba(239,68,68,0.15); }
+        .error-msg { color: #EF4444; font-size: 12px; margin-top: 4px; display: none; }
+        .error-msg.show { display: block; }
+
+        .toast {
+            position: fixed; bottom: 24px; right: 24px; padding: 16px 24px;
+            border-radius: 12px; font-size: 14px; font-weight: 500; z-index: 9999;
+            transform: translateY(120%); transition: transform 0.4s ease; max-width: 360px;
+        }
+        .toast.show { transform: translateY(0); }
+        .toast-success { background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); color: #10B981; }
+        .toast-error { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #EF4444; }
+
+        .mobile-menu { max-height: 0; overflow: hidden; transition: max-height 0.4s ease, opacity 0.3s ease; opacity: 0; }
+        .mobile-menu.open { max-height: 400px; opacity: 1; }
+        .section-divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent); }
+        .hp-field { display: none !important; }
+        .angle-value { transition: color 0.8s ease; }
+        .status-text { transition: color 0.8s ease; }
+
+        /* Direction indicator arrow on OLED */
+        .direction-arrow { transition: transform 0.8s ease, color 0.8s ease; display: inline-block; }
+    </style>
+</head>
+<body>
+
+    <!-- NAVBAR -->
+    <nav id="navbar" class="fixed top-0 left-0 right-0 z-50 transition-all duration-300" style="background: rgba(11,12,16,0.8); backdrop-filter: blur(20px); border-bottom: 1px solid rgba(255,255,255,0.06);">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <a href="#hero" class="flex items-center gap-2.5 group">
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-green to-brand-cyan flex items-center justify-center"><i data-lucide="triangle" class="w-4 h-4 text-white"></i></div>
+                    <span class="text-lg font-semibold tracking-tight">KLOTERAL</span>
+                </a>
+                <div class="hidden md:flex items-center gap-1">
+                    <a href="#tentang" class="nav-link px-3 py-2 text-sm text-white/60 hover:text-white transition-colors duration-200 rounded-lg hover:bg-white/5">Tentang</a>
+                    <a href="#cara-kerja" class="nav-link px-3 py-2 text-sm text-white/60 hover:text-white transition-colors duration-200 rounded-lg hover:bg-white/5">Cara Kerja</a>
+                    <a href="#manfaat" class="nav-link px-3 py-2 text-sm text-white/60 hover:text-white transition-colors duration-200 rounded-lg hover:bg-white/5">Manfaat</a>
+                    <a href="#spesifikasi" class="nav-link px-3 py-2 text-sm text-white/60 hover:text-white transition-colors duration-200 rounded-lg hover:bg-white/5">Spesifikasi</a>
+                    <a href="#roadmap" class="nav-link px-3 py-2 text-sm text-white/60 hover:text-white transition-colors duration-200 rounded-lg hover:bg-white/5">Roadmap</a>
+                </div>
+                <div class="flex items-center gap-3">
+                    <a href="#kontak" class="hidden sm:inline-flex items-center gap-2 px-4 py-2 bg-brand-green text-white text-sm font-medium rounded-lg hover:bg-emerald-400 transition-colors duration-200" style="box-shadow: 0 4px 15px rgba(16,185,129,0.3);"><i data-lucide="mail" class="w-4 h-4"></i>Hubungi Kami</a>
+                    <button id="mobile-toggle" class="md:hidden p-2 text-white/60 hover:text-white transition-colors" aria-label="Toggle menu"><i data-lucide="menu" class="w-5 h-5" id="menu-icon"></i></button>
+                </div>
+            </div>
+            <div id="mobile-menu" class="mobile-menu md:hidden">
+                <div class="py-3 space-y-1 border-t border-white/5">
+                    <a href="#tentang" class="mobile-link block px-3 py-2.5 text-sm text-white/60 hover:text-white hover:bg-white/5 rounded-lg transition-colors">Tentang</a>
+                    <a href="#cara-kerja" class="mobile-link block px-3 py-2.5 text-sm text-white/60 hover:text-white hover:bg-white/5 rounded-lg transition-colors">Cara Kerja</a>
+                    <a href="#manfaat" class="mobile-link block px-3 py-2.5 text-sm text-white/60 hover:text-white hover:bg-white/5 rounded-lg transition-colors">Manfaat</a>
+                    <a href="#spesifikasi" class="mobile-link block px-3 py-2.5 text-sm text-white/60 hover:text-white hover:bg-white/5 rounded-lg transition-colors">Spesifikasi</a>
+                    <a href="#roadmap" class="mobile-link block px-3 py-2.5 text-sm text-white/60 hover:text-white hover:bg-white/5 rounded-lg transition-colors">Roadmap</a>
+                    <a href="#kontak" class="mobile-link block mx-3 mt-2 px-4 py-2.5 bg-brand-green text-white text-sm font-medium rounded-lg text-center">Hubungi Kami</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- HERO SECTION -->
+    <section id="hero" class="relative min-h-screen flex items-center justify-center pt-16 overflow-hidden">
+        <div class="absolute inset-0" style="background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(16,185,129,0.12), transparent), radial-gradient(ellipse 60% 40% at 80% 60%, rgba(6,182,212,0.06), transparent), radial-gradient(ellipse 50% 30% at 20% 80%, rgba(99,102,241,0.05), transparent);"></div>
+        <div class="absolute inset-0 opacity-[0.015]" style="background-image: url('https://grainy-gradients.vercel.app/noise.svg');"></div>
+
+        <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
+            <div class="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+                <!-- Text -->
+                <div class="text-center lg:text-left">
+                    <div class="animate-in-d1 inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-brand-green/20 bg-brand-green/5 mb-6">
+                        <span class="w-2 h-2 rounded-full bg-brand-green animate-pulse"></span>
+                        <span class="text-xs font-medium text-brand-green tracking-wide uppercase">Inovasi Keselamatan Jalan</span>
+                    </div>
+                    <h1 class="animate-in-d2 text-4xl sm:text-5xl lg:text-6xl font-semibold leading-[1.08] tracking-tight mb-6">
+                        <span class="gradient-text-hero">Satu Alat, Solusi Lengkap</span><br>
+                        <span class="text-white/90">untuk Keselamatan</span><br>
+                        <span class="text-white">Jalan Pegunungan</span>
+                    </h1>
+                    <p class="animate-in-d3 text-base sm:text-lg text-white/50 leading-relaxed max-w-lg mx-auto lg:mx-0 mb-8">
+                        Inklinometer digital terintegrasi dengan sensor kemiringan, GPS, layar OLED, dan LED peringatan dini — dalam satu perangkat portabel berbasis Arduino.
+                    </p>
+                    <div class="animate-in-d4 flex flex-col sm:flex-row items-center gap-3 justify-center lg:justify-start">
+                        <a href="#tentang" class="group inline-flex items-center gap-2 px-6 py-3 bg-brand-green text-white font-medium rounded-xl hover:bg-emerald-400 transition-all duration-300" style="box-shadow: 0 4px 20px rgba(16,185,129,0.35);">Pelajari Lebih Lanjut<i data-lucide="arrow-down" class="w-4 h-4 group-hover:translate-y-0.5 transition-transform"></i></a>
+                        <a href="#cara-kerja" class="group inline-flex items-center gap-2 px-6 py-3 bg-white/5 text-white/80 font-medium rounded-xl border border-white/10 hover:bg-white/10 hover:text-white transition-all duration-300"><i data-lucide="play-circle" class="w-4 h-4"></i>Lihat Cara Kerja</a>
+                    </div>
+                    <div class="animate-in-d5 grid grid-cols-3 gap-4 mt-10 max-w-md mx-auto lg:mx-0">
+                        <div class="text-center lg:text-left"><div class="text-2xl font-semibold text-white">5<span class="text-brand-green">-</span>in<span class="text-brand-green">-</span>1</div><div class="text-xs text-white/40 mt-1">Komponen Terintegrasi</div></div>
+                        <div class="text-center lg:text-left"><div class="text-2xl font-semibold text-white">±Rp342<span class="text-brand-green">rb</span></div><div class="text-xs text-white/40 mt-1">Biaya Prototipe</div></div>
+                        <div class="text-center lg:text-left"><div class="text-2xl font-semibold text-white">3 <span class="text-brand-green">LED</span></div><div class="text-xs text-white/40 mt-1">Indikator Peringatan</div></div>
+                    </div>
+                </div>
+
+                <!-- Device (TILTS LEFT & RIGHT) -->
+                <div class="animate-in-d3 flex justify-center lg:justify-end">
+                    <div class="w-full max-w-sm relative" style="padding-bottom: 50px;">
+                        <!-- Ground reference line -->
+                        <div class="absolute bottom-0 left-0 right-0 h-px" style="background: linear-gradient(90deg, transparent 5%, rgba(255,255,255,0.15) 50%, transparent 95%);"></div>
+                        <!-- Pivot dot -->
+                        <div class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-2.5 h-2.5 rounded-full bg-white/15 border border-white/20 z-20"></div>
+                        <!-- Angle arc (dynamic via JS) -->
+                        <svg id="angle-arc-svg" class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 z-10 pointer-events-none" width="80" height="40" viewBox="0 0 80 40" style="overflow:visible;">
+                            <path id="arc-path" d="" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.2" stroke-dasharray="3 3"/>
+                            <text id="arc-label" x="40" y="38" text-anchor="middle" fill="rgba(255,255,255,0.3)" font-size="9" font-family="JetBrains Mono, monospace"></text>
+                        </svg>
+
+                        <!-- Tilt wrapper -->
+                        <div id="device-tilt" class="device-tilt-wrapper" style="transform: rotate(0deg);">
+                            <div class="device-body p-6 rounded-2xl" style="box-shadow: 0 25px 80px -20px rgba(16,185,129,0.2), 0 0 0 1px rgba(255,255,255,0.06);">
+                                <div class="flex items-center justify-between mb-5">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-6 h-6 rounded-md bg-gradient-to-br from-brand-green to-brand-cyan flex items-center justify-center"><i data-lucide="triangle" class="w-3 h-3 text-white"></i></div>
+                                        <span class="text-xs font-mono font-medium text-white/70">KLOTERAL v1.0</span>
+                                    </div>
+                                    <span class="text-[10px] font-mono text-brand-green/60">ACTIVE</span>
+                                </div>
+
+                                <!-- OLED Screen -->
+                                <div class="oled-screen p-4 mb-5">
+                                    <div class="text-[10px] font-mono text-white/30 mb-2">── DATA REAL-TIME ──</div>
+                                    <div class="space-y-2">
+                                        <div class="flex justify-between items-baseline">
+                                            <span class="text-[10px] font-mono text-white/40">SUDUT</span>
+                                            <div class="flex items-baseline gap-1.5">
+                                                <span id="direction-arrow" class="direction-arrow text-sm" style="color: #10B981;">—</span>
+                                                <span class="text-2xl font-mono font-medium angle-value" id="angle-display" style="color: #10B981;">0.0°</span>
+                                            </div>
+                                        </div>
+                                        <div class="flex justify-between items-baseline">
+                                            <span class="text-[10px] font-mono text-white/40">LAT</span>
+                                            <span class="text-[11px] font-mono text-white/70">-6.9175° S</span>
+                                        </div>
+                                        <div class="flex justify-between items-baseline">
+                                            <span class="text-[10px] font-mono text-white/40">LON</span>
+                                            <span class="text-[11px] font-mono text-white/70">107.6191° E</span>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3 pt-2 border-t border-white/5">
+                                        <div class="text-[10px] font-mono status-text" id="status-display" style="color: #10B981;">✓ Aman – Kemiringan Rendah</div>
+                                    </div>
+                                </div>
+
+                                <!-- LED 3 circles -->
+                                <div class="mb-4">
+                                    <div class="text-[10px] font-mono text-white/30 mb-3">INDIKATOR LED</div>
+                                    <div class="flex items-center justify-between px-2">
+                                        <div class="flex flex-col items-center gap-1.5">
+                                            <div id="led-green" class="led-circle on-green" style="background: #10B981;"></div>
+                                            <span class="text-[9px] font-mono text-white/30">AMAN</span>
+                                        </div>
+                                        <div class="flex flex-col items-center gap-1.5">
+                                            <div id="led-yellow" class="led-circle off" style="background: #F59E0B;"></div>
+                                            <span class="text-[9px] font-mono text-white/30">WASPADA</span>
+                                        </div>
+                                        <div class="flex flex-col items-center gap-1.5">
+                                            <div id="led-red" class="led-circle off" style="background: #EF4444;"></div>
+                                            <span class="text-[9px] font-mono text-white/30">BAHAYA</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="flex flex-wrap gap-1.5">
+                                    <span class="px-2 py-1 text-[9px] font-mono text-white/40 bg-white/5 rounded-md border border-white/5">MPU6050</span>
+                                    <span class="px-2 py-1 text-[9px] font-mono text-white/40 bg-white/5 rounded-md border border-white/5">NEO-6M</span>
+                                    <span class="px-2 py-1 text-[9px] font-mono text-white/40 bg-white/5 rounded-md border border-white/5">SSD1306</span>
+                                    <span class="px-2 py-1 text-[9px] font-mono text-white/40 bg-white/5 rounded-md border border-white/5">UNO R3</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Angle badge below -->
+                        <div class="absolute -bottom-2 left-1/2 -translate-x-1/2 z-10">
+                            <div class="px-3 py-1 rounded-full bg-surface-primary border border-white/10">
+                                <span class="text-[11px] font-mono text-white/50">Sudut: </span>
+                                <span class="text-[11px] font-mono font-medium angle-value" id="angle-badge" style="color: #10B981;">0.0°</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 animate-bounce">
+            <span class="text-[10px] text-white/30 uppercase tracking-widest">Scroll</span>
+            <i data-lucide="chevron-down" class="w-4 h-4 text-white/20"></i>
+        </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- PROBLEM STATEMENT -->
+    <section id="tentang" class="relative py-24 lg:py-32 overflow-hidden">
+        <div class="absolute inset-0" style="background: radial-gradient(ellipse 50% 50% at 20% 50%, rgba(239,68,68,0.04), transparent);"></div>
+        <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16 reveal">
+                <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-brand-red/20 bg-brand-red/5 mb-4"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-brand-red"></i><span class="text-xs font-medium text-brand-red/80 tracking-wide uppercase">Masalah</span></div>
+                <h2 class="text-3xl sm:text-4xl font-semibold tracking-tight mb-4">Metode Konvensional <span class="text-brand-red">Tidak Lagi Memadai</span></h2>
+                <p class="text-white/50 max-w-2xl mx-auto leading-relaxed">Pendekatan lama dalam mengukur kemiringan jalan menimbulkan berbagai risiko yang mengancam keselamatan dan efisiensi.</p>
+            </div>
+            <div class="grid md:grid-cols-2 gap-6 lg:gap-8 max-w-5xl mx-auto">
+                <div class="reveal reveal-d1 glass-card rounded-2xl p-6 lg:p-8" style="border-color: rgba(239,68,68,0.15);">
+                    <div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-xl bg-brand-red/10 flex items-center justify-center"><i data-lucide="x-circle" class="w-5 h-5 text-brand-red"></i></div><div><h3 class="font-semibold text-white">Metode Konvensional</h3><p class="text-xs text-white/40">Alat terpisah & manual</p></div></div>
+                    <ul class="space-y-3">
+                        <li class="flex items-start gap-3"><i data-lucide="x" class="w-4 h-4 text-brand-red/60 mt-0.5 shrink-0"></i><span class="text-sm text-white/60">Alat ukur kemiringan dan GPS harus dibawa terpisah</span></li>
+                        <li class="flex items-start gap-3"><i data-lucide="x" class="w-4 h-4 text-brand-red/60 mt-0.5 shrink-0"></i><span class="text-sm text-white/60">Rawan <strong class="text-white/80">human error</strong> saat pencatatan data manual</span></li>
+                        <li class="flex items-start gap-3"><i data-lucide="x" class="w-4 h-4 text-brand-red/60 mt-0.5 shrink-0"></i><span class="text-sm text-white/60">Proses pengukuran lambat dan tidak efisien</span></li>
+                        <li class="flex items-start gap-3"><i data-lucide="x" class="w-4 h-4 text-brand-red/60 mt-0.5 shrink-0"></i><span class="text-sm text-white/60">Tidak ada sistem peringatan dini untuk pengendara</span></li>
+                        <li class="flex items-start gap-3"><i data-lucide="x" class="w-4 h-4 text-brand-red/60 mt-0.5 shrink-0"></i><span class="text-sm text-white/60">Risiko kecelakaan tinggi (rem blong di tanjakan/turunan tajam)</span></li>
+                    </ul>
+                </div>
+                <div class="reveal reveal-d2 glass-card rounded-2xl p-6 lg:p-8" style="border-color: rgba(16,185,129,0.15);">
+                    <div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-xl bg-brand-green/10 flex items-center justify-center"><i data-lucide="check-circle" class="w-5 h-5 text-brand-green"></i></div><div><h3 class="font-semibold text-white">Dengan KLOTERAL</h3><p class="text-xs text-white/40">Terintegrasi & otomatis</p></div></div>
+                    <ul class="space-y-3">
+                        <li class="flex items-start gap-3"><i data-lucide="check" class="w-4 h-4 text-brand-green/80 mt-0.5 shrink-0"></i><span class="text-sm text-white/60">Semua sensor tergabung dalam <strong class="text-white/80">satu perangkat portabel</strong></span></li>
+                        <li class="flex items-start gap-3"><i data-lucide="check" class="w-4 h-4 text-brand-green/80 mt-0.5 shrink-0"></i><span class="text-sm text-white/60">Data tercatat otomatis, <strong class="text-white/80">minim human error</strong></span></li>
+                        <li class="flex items-start gap-3"><i data-lucide="check" class="w-4 h-4 text-brand-green/80 mt-0.5 shrink-0"></i><span class="text-sm text-white/60">Pengukuran cepat — hasil langsung tampil di layar OLED</span></li>
+                        <li class="flex items-start gap-3"><i data-lucide="check" class="w-4 h-4 text-brand-green/80 mt-0.5 shrink-0"></i><span class="text-sm text-white/60"><strong class="text-white/80">LED 3 warna</strong> sebagai peringatan dini visual</span></li>
+                        <li class="flex items-start gap-3"><i data-lucide="check" class="w-4 h-4 text-brand-green/80 mt-0.5 shrink-0"></i><span class="text-sm text-white/60">Mengurangi risiko kecelakaan fatal secara signifikan</span></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+    <div class="section-divider"></div>
+
+    <!-- SOLUSI -->
+    <section class="relative py-24 lg:py-32 overflow-hidden">
+        <div class="absolute inset-0" style="background: radial-gradient(ellipse 60% 50% at 70% 50%, rgba(16,185,129,0.06), transparent);"></div>
+        <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16 reveal">
+                <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-brand-green/20 bg-brand-green/5 mb-4"><i data-lucide="cpu" class="w-3.5 h-3.5 text-brand-green"></i><span class="text-xs font-medium text-brand-green/80 tracking-wide uppercase">Solusi</span></div>
+                <h2 class="text-3xl sm:text-4xl font-semibold tracking-tight mb-4">Apa Itu <span class="gradient-text-green">KLOTERAL</span>?</h2>
+                <p class="text-white/50 max-w-2xl mx-auto leading-relaxed">Alat ukur kemiringan jalan (inklinometer) digital berbasis Arduino UNO R3 yang dirancang kompak dan terintegrasi penuh.</p>
+            </div>
+            <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+                <div class="reveal reveal-d1 glass-card rounded-2xl p-6 group"><div class="w-12 h-12 rounded-xl bg-brand-blue/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300"><i data-lucide="circuit-board" class="w-6 h-6 text-brand-blue"></i></div><h3 class="font-semibold text-white mb-2">Arduino UNO R3</h3><p class="text-sm text-white/50 leading-relaxed">Mikrokontroler utama yang mengolah data dari semua sensor secara real-time.</p></div>
+                <div class="reveal reveal-d2 glass-card rounded-2xl p-6 group"><div class="w-12 h-12 rounded-xl bg-brand-green/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300"><i data-lucide="rotate-3d" class="w-6 h-6 text-brand-green"></i></div><h3 class="font-semibold text-white mb-2">Sensor MPU6050</h3><p class="text-sm text-white/50 leading-relaxed">Mengukur sudut kemiringan jalan dengan presisi tinggi menggunakan akselerometer & giroskop.</p></div>
+                <div class="reveal reveal-d3 glass-card rounded-2xl p-6 group"><div class="w-12 h-12 rounded-xl bg-brand-cyan/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300"><i data-lucide="map-pin" class="w-6 h-6 text-brand-cyan"></i></div><h3 class="font-semibold text-white mb-2">GPS NEO-6M V2</h3><p class="text-sm text-white/50 leading-relaxed">Merekam koordinat lokasi titik kemiringan secara otomatis dan akurat.</p></div>
+                <div class="reveal reveal-d4 glass-card rounded-2xl p-6 group"><div class="w-12 h-12 rounded-xl bg-brand-yellow/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300"><i data-lucide="monitor-smartphone" class="w-6 h-6 text-brand-yellow"></i></div><h3 class="font-semibold text-white mb-2">OLED + LED 3 Warna</h3><p class="text-sm text-white/50 leading-relaxed">Layar SSD1306 menampilkan data real-time, LED hijau/kuning/merah memberikan peringatan dini visual.</p></div>
+            </div>
+        </div>
+    </section>
+    <div class="section-divider"></div>
+
+    <!-- CARA KERJA -->
+    <section id="cara-kerja" class="relative py-24 lg:py-32 overflow-hidden">
+        <div class="absolute inset-0" style="background: radial-gradient(ellipse 50% 50% at 50% 0%, rgba(6,182,212,0.05), transparent);"></div>
+        <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16 reveal">
+                <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-brand-cyan/20 bg-brand-cyan/5 mb-4"><i data-lucide="workflow" class="w-3.5 h-3.5 text-brand-cyan"></i><span class="text-xs font-medium text-brand-cyan/80 tracking-wide uppercase">Cara Kerja</span></div>
+                <h2 class="text-3xl sm:text-4xl font-semibold tracking-tight mb-4">5 Langkah <span class="gradient-text-green">Sederhana</span></h2>
+                <p class="text-white/50 max-w-2xl mx-auto leading-relaxed">Dari penempatan alat hingga peringatan dini — semuanya berjalan otomatis dalam hitungan detik.</p>
+            </div>
+            <div class="relative max-w-4xl mx-auto">
+                <div class="hidden md:grid md:grid-cols-5 gap-4">
+                    <div class="reveal reveal-d1 relative text-center group"><div class="w-14 h-14 rounded-2xl bg-brand-green/10 border border-brand-green/20 flex items-center justify-center mx-auto mb-4 group-hover:bg-brand-green/20 transition-colors"><span class="text-lg font-semibold text-brand-green">1</span></div><h4 class="text-sm font-medium text-white mb-2">Tempatkan Alat</h4><p class="text-xs text-white/40 leading-relaxed">Posisikan KLOTERAL di titik jalan yang akan diukur.</p><div class="absolute top-7 left-[calc(50%+32px)] w-[calc(100%-64px)] h-[2px]" style="background: linear-gradient(90deg, rgba(16,185,129,0.3), rgba(6,182,212,0.3));"></div></div>
+                    <div class="reveal reveal-d2 relative text-center group"><div class="w-14 h-14 rounded-2xl bg-brand-green/10 border border-brand-green/20 flex items-center justify-center mx-auto mb-4 group-hover:bg-brand-green/20 transition-colors"><span class="text-lg font-semibold text-brand-green">2</span></div><h4 class="text-sm font-medium text-white mb-2">Baca Sudut</h4><p class="text-xs text-white/40 leading-relaxed">MPU6050 membaca sudut kemiringan secara otomatis.</p><div class="absolute top-7 left-[calc(50%+32px)] w-[calc(100%-64px)] h-[2px]" style="background: linear-gradient(90deg, rgba(16,185,129,0.3), rgba(6,182,212,0.3));"></div></div>
+                    <div class="reveal reveal-d3 relative text-center group"><div class="w-14 h-14 rounded-2xl bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center mx-auto mb-4 group-hover:bg-brand-cyan/20 transition-colors"><span class="text-lg font-semibold text-brand-cyan">3</span></div><h4 class="text-sm font-medium text-white mb-2">Catat Lokasi</h4><p class="text-xs text-white/40 leading-relaxed">GPS NEO-6M mencatat koordinat lokasi.</p><div class="absolute top-7 left-[calc(50%+32px)] w-[calc(100%-64px)] h-[2px]" style="background: linear-gradient(90deg, rgba(6,182,212,0.3), rgba(245,158,11,0.3));"></div></div>
+                    <div class="reveal reveal-d4 relative text-center group"><div class="w-14 h-14 rounded-2xl bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center mx-auto mb-4 group-hover:bg-brand-cyan/20 transition-colors"><span class="text-lg font-semibold text-brand-cyan">4</span></div><h4 class="text-sm font-medium text-white mb-2">Tampil Data</h4><p class="text-xs text-white/40 leading-relaxed">OLED menampilkan sudut dan koordinat real-time.</p><div class="absolute top-7 left-[calc(50%+32px)] w-[calc(100%-64px)] h-[2px]" style="background: linear-gradient(90deg, rgba(245,158,11,0.3), rgba(239,68,68,0.3));"></div></div>
+                    <div class="reveal reveal-d5 text-center group"><div class="w-14 h-14 rounded-2xl bg-brand-yellow/10 border border-brand-yellow/20 flex items-center justify-center mx-auto mb-4 group-hover:bg-brand-yellow/20 transition-colors"><span class="text-lg font-semibold text-brand-yellow">5</span></div><h4 class="text-sm font-medium text-white mb-2">LED Berperingat</h4><p class="text-xs text-white/40 leading-relaxed">LED menyala sesuai tingkat kecuraman.</p></div>
+                </div>
+                <div class="md:hidden space-y-0 relative">
+                    <div class="absolute left-6 top-0 bottom-0 w-0.5" style="background: linear-gradient(to bottom, #10B981, #06B6D4, #F59E0B);"></div>
+                    <div class="reveal reveal-d1 flex gap-4 pb-8 relative"><div class="w-12 h-12 rounded-xl bg-brand-green/10 border border-brand-green/20 flex items-center justify-center shrink-0 z-10"><span class="text-sm font-semibold text-brand-green">1</span></div><div class="pt-1"><h4 class="text-sm font-medium text-white mb-1">Tempatkan Alat</h4><p class="text-xs text-white/40 leading-relaxed">Posisikan KLOTERAL di titik jalan yang akan diukur.</p></div></div>
+                    <div class="reveal reveal-d2 flex gap-4 pb-8 relative"><div class="w-12 h-12 rounded-xl bg-brand-green/10 border border-brand-green/20 flex items-center justify-center shrink-0 z-10"><span class="text-sm font-semibold text-brand-green">2</span></div><div class="pt-1"><h4 class="text-sm font-medium text-white mb-1">Baca Sudut</h4><p class="text-xs text-white/40 leading-relaxed">MPU6050 membaca sudut kemiringan otomatis.</p></div></div>
+                    <div class="reveal reveal-d3 flex gap-4 pb-8 relative"><div class="w-12 h-12 rounded-xl bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center shrink-0 z-10"><span class="text-sm font-semibold text-brand-cyan">3</span></div><div class="pt-1"><h4 class="text-sm font-medium text-white mb-1">Catat Lokasi</h4><p class="text-xs text-white/40 leading-relaxed">GPS NEO-6M mencatat koordinat lokasi.</p></div></div>
+                    <div class="reveal reveal-d4 flex gap-4 pb-8 relative"><div class="w-12 h-12 rounded-xl bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center shrink-0 z-10"><span class="text-sm font-semibold text-brand-cyan">4</span></div><div class="pt-1"><h4 class="text-sm font-medium text-white mb-1">Tampil Data</h4><p class="text-xs text-white/40 leading-relaxed">OLED menampilkan sudut dan koordinat real-time.</p></div></div>
+                    <div class="reveal reveal-d5 flex gap-4 relative"><div class="w-12 h-12 rounded-xl bg-brand-yellow/10 border border-brand-yellow/20 flex items-center justify-center shrink-0 z-10"><span class="text-sm font-semibold text-brand-yellow">5</span></div><div class="pt-1"><h4 class="text-sm font-medium text-white mb-1">LED Berperingat</h4><p class="text-xs text-white/40 leading-relaxed">LED menyala: hijau, kuning, atau merah.</p></div></div>
+                </div>
+            </div>
+            <!-- LED Indicator Card -->
+            <div class="reveal max-w-2xl mx-auto mt-16">
+                <div class="glass-card rounded-2xl p-6">
+                    <h4 class="text-sm font-medium text-white/80 mb-5 text-center">Sistem Indikator LED 3 Warna</h4>
+                    <div class="grid grid-cols-3 gap-6">
+                        <div class="flex flex-col items-center text-center"><div id="ind-led-green" class="led-indicator-bar w-full mb-3 on-green"></div><span class="text-xs font-mono font-medium text-brand-green">AMAN</span><div class="text-[10px] text-white/30 mt-1">0° – 8°</div><p class="text-[10px] text-white/25 mt-2 leading-relaxed">Kemiringan rendah, jalan relatif datar</p></div>
+                        <div class="flex flex-col items-center text-center"><div id="ind-led-yellow" class="led-indicator-bar w-full mb-3 off" style="background: #F59E0B;"></div><span class="text-xs font-mono font-medium text-brand-yellow">WASPADA</span><div class="text-[10px] text-white/30 mt-1">8° – 15°</div><p class="text-[10px] text-white/25 mt-2 leading-relaxed">Kemiringan sedang, perlu hati-hati</p></div>
+                        <div class="flex flex-col items-center text-center"><div id="ind-led-red" class="led-indicator-bar w-full mb-3 off" style="background: #EF4444;"></div><span class="text-xs font-mono font-medium text-brand-red">BAHAYA</span><div class="text-[10px] text-white/30 mt-1">&gt; 15°</div><p class="text-[10px] text-white/25 mt-2 leading-relaxed">Kemiringan tajam, risiko tinggi</p></div>
+                    </div>
+                    <p class="text-[10px] text-white/20 text-center mt-4">* Simulasi mengikuti sudut pada ilustrasi perangkat di atas</p>
+                </div>
+            </div>
+        </div>
+    </section>
+    <div class="section-divider"></div>
+
+    <!-- MANFAAT -->
+    <section id="manfaat" class="relative py-24 lg:py-32 overflow-hidden">
+        <div class="absolute inset-0" style="background: radial-gradient(ellipse 50% 50% at 80% 80%, rgba(99,102,241,0.04), transparent);"></div>
+        <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16 reveal">
+                <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-brand-blue/20 bg-brand-blue/5 mb-4"><i data-lucide="heart-handshake" class="w-3.5 h-3.5 text-brand-blue"></i><span class="text-xs font-medium text-brand-blue/80 tracking-wide uppercase">Manfaat</span></div>
+                <h2 class="text-3xl sm:text-4xl font-semibold tracking-tight mb-4">Dampak Nyata untuk <span class="gradient-text-green">Setiap Pemangku Kepentingan</span></h2>
+                <p class="text-white/50 max-w-2xl mx-auto leading-relaxed">KLOTERAL dirancang untuk memberikan manfaat yang terukur bagi berbagai segmen audiens.</p>
+            </div>
+            <div class="max-w-5xl mx-auto">
+                <div class="reveal flex flex-wrap justify-center gap-2 mb-10">
+                    <button class="benefit-tab active px-4 py-2.5 text-sm font-medium rounded-xl border transition-all duration-300" data-tab="pengendara"><i data-lucide="car" class="w-4 h-4 inline mr-1.5 -mt-0.5"></i>Pengendara</button>
+                    <button class="benefit-tab px-4 py-2.5 text-sm font-medium rounded-xl border transition-all duration-300" data-tab="instansi"><i data-lucide="landmark" class="w-4 h-4 inline mr-1.5 -mt-0.5"></i>Instansi Pemerintah</button>
+                    <button class="benefit-tab px-4 py-2.5 text-sm font-medium rounded-xl border transition-all duration-300" data-tab="ekosistem"><i data-lucide="rocket" class="w-4 h-4 inline mr-1.5 -mt-0.5"></i>Ekosistem Inovasi</button>
+                </div>
+                <div id="tab-pengendara" class="benefit-content"><div class="grid md:grid-cols-2 gap-6"><div class="reveal reveal-d1 glass-card rounded-2xl p-6 lg:p-8"><div class="w-12 h-12 rounded-xl bg-brand-green/10 flex items-center justify-center mb-4"><i data-lucide="eye" class="w-6 h-6 text-brand-green"></i></div><h3 class="font-semibold text-white mb-2">Peringatan Dini Visual</h3><p class="text-sm text-white/50 leading-relaxed">LED 3 warna (hijau/kuning/merah) yang mudah dipahami memberikan sinyal langsung tentang tingkat kecuraman jalan.</p></div><div class="reveal reveal-d2 glass-card rounded-2xl p-6 lg:p-8"><div class="w-12 h-12 rounded-xl bg-brand-red/10 flex items-center justify-center mb-4"><i data-lucide="shield-check" class="w-6 h-6 text-brand-red"></i></div><h3 class="font-semibold text-white mb-2">Kurangi Risiko Kecelakaan Fatal</h3><p class="text-sm text-white/50 leading-relaxed">Dengan peringatan dini, pengendara dapat mengantisipasi kondisi rem blong di turunan atau tanjakan tajam sebelum terlambat.</p></div></div></div>
+                <div id="tab-instansi" class="benefit-content hidden"><div class="grid md:grid-cols-3 gap-6"><div class="reveal reveal-d1 glass-card rounded-2xl p-6"><div class="w-12 h-12 rounded-xl bg-brand-cyan/10 flex items-center justify-center mb-4"><i data-lucide="map" class="w-6 h-6 text-brand-cyan"></i></div><h3 class="font-semibold text-white mb-2">Pemetaan Akurat</h3><p class="text-sm text-white/50 leading-relaxed">Titik rawan kecelakaan dipetakan lebih akurat, cepat, dan tepat sasaran.</p></div><div class="reveal reveal-d2 glass-card rounded-2xl p-6"><div class="w-12 h-12 rounded-xl bg-brand-blue/10 flex items-center justify-center mb-4"><i data-lucide="file-bar-chart" class="w-6 h-6 text-brand-blue"></i></div><h3 class="font-semibold text-white mb-2">Dasar Ilmiah untuk Kebijakan</h3><p class="text-sm text-white/50 leading-relaxed">Data terukur dapat dijadikan dasar pemasangan rambu peringatan atau prioritas perbaikan jalan.</p></div><div class="reveal reveal-d3 glass-card rounded-2xl p-6"><div class="w-12 h-12 rounded-xl bg-brand-green/10 flex items-center justify-center mb-4"><i data-lucide="piggy-bank" class="w-6 h-6 text-brand-green"></i></div><h3 class="font-semibold text-white mb-2">Efisiensi Anggaran</h3><p class="text-sm text-white/50 leading-relaxed">Proses pengukuran lebih efisien sehingga menghemat waktu dan anggaran.</p></div></div></div>
+                <div id="tab-ekosistem" class="benefit-content hidden"><div class="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto"><div class="reveal reveal-d1 glass-card rounded-2xl p-6 lg:p-8"><div class="w-12 h-12 rounded-xl bg-brand-yellow/10 flex items-center justify-center mb-4"><i data-lucide="coins" class="w-6 h-6 text-brand-yellow"></i></div><h3 class="font-semibold text-white mb-2">Prototipe Terjangkau</h3><p class="text-sm text-white/50 leading-relaxed">Biaya prototipe hanya ±Rp342.000 — solusi berdampak besar tanpa investasi besar.</p></div><div class="reveal reveal-d2 glass-card rounded-2xl p-6 lg:p-8"><div class="w-12 h-12 rounded-xl bg-brand-blue/10 flex items-center justify-center mb-4"><i data-lucide="trending-up" class="w-6 h-6 text-brand-blue"></i></div><h3 class="font-semibold text-white mb-2">Potensi Skalabilitas Tinggi</h3><p class="text-sm text-white/50 leading-relaxed">Arsitektur modular dan biaya rendah membuka peluang komersialisasi luas.</p></div></div></div>
+            </div>
+        </div>
+    </section>
+    <div class="section-divider"></div>
+
+    <!-- SPESIFIKASI TEKNIS -->
+    <section id="spesifikasi" class="relative py-24 lg:py-32 overflow-hidden">
+        <div class="absolute inset-0" style="background: radial-gradient(ellipse 50% 50% at 30% 50%, rgba(99,102,241,0.04), transparent);"></div>
+        <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16 reveal">
+                <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-brand-blue/20 bg-brand-blue/5 mb-4"><i data-lucide="settings-2" class="w-3.5 h-3.5 text-brand-blue"></i><span class="text-xs font-medium text-brand-blue/80 tracking-wide uppercase">Spesifikasi</span></div>
+                <h2 class="text-3xl sm:text-4xl font-semibold tracking-tight mb-4">Spesifikasi <span class="gradient-text-green">Teknis</span></h2>
+                <p class="text-white/50 max-w-2xl mx-auto leading-relaxed">Rincian komponen dan kapabilitas teknis KLOTERAL.</p>
+            </div>
+            <div class="reveal max-w-4xl mx-auto">
+                <div class="glass-card rounded-2xl overflow-hidden">
+                    <div class="grid grid-cols-[1fr_2fr] sm:grid-cols-[1.2fr_2fr] px-6 py-4 border-b border-white/5 bg-white/[0.02]"><span class="text-xs font-semibold text-white/40 uppercase tracking-wider">Komponen</span><span class="text-xs font-semibold text-white/40 uppercase tracking-wider">Fungsi</span></div>
+                    <div class="grid grid-cols-[1fr_2fr] sm:grid-cols-[1.2fr_2fr] px-6 py-5 border-b border-white/5 hover:bg-white/[0.02] transition-colors"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center shrink-0"><i data-lucide="circuit-board" class="w-4 h-4 text-brand-blue"></i></div><span class="text-sm font-medium text-white">Arduino UNO R3</span></div><span class="text-sm text-white/50 self-center">Mikrokontroler utama yang memproses seluruh data sensor</span></div>
+                    <div class="grid grid-cols-[1fr_2fr] sm:grid-cols-[1.2fr_2fr] px-6 py-5 border-b border-white/5 hover:bg-white/[0.02] transition-colors"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-brand-green/10 flex items-center justify-center shrink-0"><i data-lucide="rotate-3d" class="w-4 h-4 text-brand-green"></i></div><span class="text-sm font-medium text-white">Sensor MPU6050</span></div><span class="text-sm text-white/50 self-center">Mengukur sudut kemiringan dengan presisi tinggi (akselerometer 6-axis)</span></div>
+                    <div class="grid grid-cols-[1fr_2fr] sm:grid-cols-[1.2fr_2fr] px-6 py-5 border-b border-white/5 hover:bg-white/[0.02] transition-colors"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-brand-cyan/10 flex items-center justify-center shrink-0"><i data-lucide="map-pin" class="w-4 h-4 text-brand-cyan"></i></div><span class="text-sm font-medium text-white">GPS NEO-6M V2</span></div><span class="text-sm text-white/50 self-center">Merekam koordinat lokasi titik kemiringan secara otomatis</span></div>
+                    <div class="grid grid-cols-[1fr_2fr] sm:grid-cols-[1.2fr_2fr] px-6 py-5 border-b border-white/5 hover:bg-white/[0.02] transition-colors"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-brand-yellow/10 flex items-center justify-center shrink-0"><i data-lucide="monitor" class="w-4 h-4 text-brand-yellow"></i></div><span class="text-sm font-medium text-white">OLED SSD1306</span></div><span class="text-sm text-white/50 self-center">Menampilkan data sudut & koordinat secara real-time (128×64 px)</span></div>
+                    <div class="grid grid-cols-[1fr_2fr] sm:grid-cols-[1.2fr_2fr] px-6 py-5 hover:bg-white/[0.02] transition-colors"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-brand-red/10 flex items-center justify-center shrink-0"><i data-lucide="lightbulb" class="w-4 h-4 text-brand-red"></i></div><span class="text-sm font-medium text-white">LED 3 Warna</span></div><span class="text-sm text-white/50 self-center">Indikator peringatan dini visual: hijau (aman), kuning (waspada), merah (bahaya)</span></div>
+                </div>
+                <div class="reveal reveal-d2 mt-6 text-center">
+                    <div class="inline-flex items-center gap-3 px-6 py-3 rounded-xl bg-brand-green/5 border border-brand-green/15"><i data-lucide="receipt" class="w-5 h-5 text-brand-green/70"></i><span class="text-sm text-white/60">Biaya Prototipe:</span><span class="text-lg font-semibold gradient-text-green">± Rp342.000</span></div>
+                    <p class="text-xs text-white/30 mt-2">Efisiensi biaya tanpa mengorbankan fungsi dan kualitas</p>
+                </div>
+            </div>
+        </div>
+    </section>
+    <div class="section-divider"></div>
+
+    <!-- ROADMAP -->
+    <section id="roadmap" class="relative py-24 lg:py-32 overflow-hidden">
+        <div class="absolute inset-0" style="background: radial-gradient(ellipse 50% 50% at 50% 50%, rgba(16,185,129,0.04), transparent);"></div>
+        <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16 reveal">
+                <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-brand-green/20 bg-brand-green/5 mb-4"><i data-lucide="milestone" class="w-3.5 h-3.5 text-brand-green"></i><span class="text-xs font-medium text-brand-green/80 tracking-wide uppercase">Roadmap</span></div>
+                <h2 class="text-3xl sm:text-4xl font-semibold tracking-tight mb-4">Bukan Akhir, Tapi <span class="gradient-text-warm">Awal</span> dari Solusi Lebih Besar</h2>
+                <p class="text-white/50 max-w-2xl mx-auto leading-relaxed">KLOTERAL terus berkembang — dari prototipe saat ini hingga visi jangka panjang.</p>
+            </div>
+            <div class="relative max-w-4xl mx-auto">
+                <div class="hidden md:block absolute left-1/2 top-0 bottom-0 w-0.5 -translate-x-px" style="background: linear-gradient(to bottom, #10B981, #F59E0B, #6366F1);"></div>
+                <div class="md:hidden absolute left-6 top-0 bottom-0 w-0.5" style="background: linear-gradient(to bottom, #10B981, #F59E0B, #6366F1);"></div>
+                <div class="reveal reveal-d1 relative flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-8 mb-16"><div class="md:w-1/2 md:text-right md:pr-8 pl-16 md:pl-0"><div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-green/10 border border-brand-green/20 mb-3"><span class="w-2 h-2 rounded-full bg-brand-green animate-pulse"></span><span class="text-xs font-medium text-brand-green">Saat Ini</span></div><h3 class="text-lg font-semibold text-white mb-2">Prototipe Terintegrasi</h3><p class="text-sm text-white/50 leading-relaxed">Alat ukur kemiringan terintegrasi dengan Arduino UNO R3, sensor MPU6050, GPS NEO-6M, layar OLED SSD1306, dan LED 3 warna.</p></div><div class="absolute left-3.5 md:left-1/2 md:-translate-x-1/2 w-5 h-5 rounded-full bg-brand-green border-4 border-surface-primary z-10" style="box-shadow: 0 0 15px rgba(16,185,129,0.5);"></div><div class="md:w-1/2 md:pl-8 hidden md:block"><div class="glass-card rounded-xl p-4"><div class="flex flex-wrap gap-1.5"><span class="px-2 py-1 text-[10px] font-mono text-brand-green/70 bg-brand-green/10 rounded">Arduino</span><span class="px-2 py-1 text-[10px] font-mono text-brand-green/70 bg-brand-green/10 rounded">MPU6050</span><span class="px-2 py-1 text-[10px] font-mono text-brand-green/70 bg-brand-green/10 rounded">NEO-6M</span><span class="px-2 py-1 text-[10px] font-mono text-brand-green/70 bg-brand-green/10 rounded">OLED</span><span class="px-2 py-1 text-[10px] font-mono text-brand-green/70 bg-brand-green/10 rounded">LED ×3</span></div></div></div></div>
+                <div class="reveal reveal-d2 relative flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-8 mb-16"><div class="md:w-1/2 md:text-right md:pr-8 hidden md:block"><div class="glass-card rounded-xl p-4"><div class="flex flex-wrap gap-1.5"><span class="px-2 py-1 text-[10px] font-mono text-brand-yellow/70 bg-brand-yellow/10 rounded">Bluetooth</span><span class="px-2 py-1 text-[10px] font-mono text-brand-yellow/70 bg-brand-yellow/10 rounded">WiFi</span><span class="px-2 py-1 text-[10px] font-mono text-brand-yellow/70 bg-brand-yellow/10 rounded">Mobile App</span><span class="px-2 py-1 text-[10px] font-mono text-brand-yellow/70 bg-brand-yellow/10 rounded">Pemetaan Digital</span></div></div></div><div class="absolute left-3.5 md:left-1/2 md:-translate-x-1/2 w-5 h-5 rounded-full bg-brand-yellow border-4 border-surface-primary z-10" style="box-shadow: 0 0 15px rgba(245,158,11,0.5);"></div><div class="md:w-1/2 md:pl-8 pl-16"><div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-yellow/10 border border-brand-yellow/20 mb-3"><span class="w-2 h-2 rounded-full bg-brand-yellow"></span><span class="text-xs font-medium text-brand-yellow">Jangka Menengah</span></div><h3 class="text-lg font-semibold text-white mb-2">Konektivitas & Aplikasi Mobile</h3><p class="text-sm text-white/50 leading-relaxed">Integrasi Bluetooth/WiFi untuk menghubungkan alat ke aplikasi mobile. Data dipetakan secara digital.</p></div></div>
+                <div class="reveal reveal-d3 relative flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-8"><div class="md:w-1/2 md:text-right md:pr-8 pl-16 md:pl-0"><div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-blue/10 border border-brand-blue/20 mb-3"><span class="w-2 h-2 rounded-full bg-brand-blue"></span><span class="text-xs font-medium text-brand-blue">Jangka Panjang</span></div><h3 class="text-lg font-semibold text-white mb-2">Produksi Massal & Integrasi Platform</h3><p class="text-sm text-white/50 leading-relaxed">Produksi massal untuk Dinas PU di seluruh wilayah pegunungan Indonesia. Integrasi Google Maps/Waze.</p></div><div class="absolute left-3.5 md:left-1/2 md:-translate-x-1/2 w-5 h-5 rounded-full bg-brand-blue border-4 border-surface-primary z-10" style="box-shadow: 0 0 15px rgba(99,102,241,0.5);"></div><div class="md:w-1/2 md:pl-8 hidden md:block"><div class="glass-card rounded-xl p-4"><div class="flex flex-wrap gap-1.5"><span class="px-2 py-1 text-[10px] font-mono text-brand-blue/70 bg-brand-blue/10 rounded">Produksi Massal</span><span class="px-2 py-1 text-[10px] font-mono text-brand-blue/70 bg-brand-blue/10 rounded">Sensor Cuaca</span><span class="px-2 py-1 text-[10px] font-mono text-brand-blue/70 bg-brand-blue/10 rounded">Google Maps</span><span class="px-2 py-1 text-[10px] font-mono text-brand-blue/70 bg-brand-blue/10 rounded">Waze</span><span class="px-2 py-1 text-[10px] font-mono text-brand-blue/70 bg-brand-blue/10 rounded">Nasional</span></div></div></div></div>
+            </div>
+        </div>
+    </section>
+    <div class="section-divider"></div>
+
+    <!-- GALERI -->
+    <section class="relative py-24 lg:py-32 overflow-hidden">
+        <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16 reveal"><div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-white/5 mb-4"><i data-lucide="image" class="w-3.5 h-3.5 text-white/50"></i><span class="text-xs font-medium text-white/50 tracking-wide uppercase">Dokumentasi</span></div><h2 class="text-3xl sm:text-4xl font-semibold tracking-tight mb-4">Galeri <span class="text-white/70">Prototipe</span></h2><p class="text-white/50 max-w-2xl mx-auto leading-relaxed">Dokumentasi visual proses pengembangan dan pengujian KLOTERAL.</p></div>
+            <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+                <div class="reveal reveal-d1 glass-card rounded-2xl overflow-hidden group"><div class="aspect-[4/3] bg-surface-elevated relative overflow-hidden"><img src="assets/DOKUM 9.jpg" alt="Prototipe KLOTERAL" class="w-full h-full object-cover opacity-70 group-hover:opacity-90 group-hover:scale-105 transition-all duration-500" loading="lazy"><div class="absolute inset-0 bg-gradient-to-t from-surface-primary/80 via-transparent to-transparent"></div><div class="absolute bottom-4 left-4 right-4"><span class="text-xs font-mono text-white/50">01</span><p class="text-sm font-medium text-white mt-1">Tampilan Prototipe</p></div></div></div>
+                <div class="reveal reveal-d2 glass-card rounded-2xl overflow-hidden group"><div class="aspect-[4/3] bg-surface-elevated relative overflow-hidden"><img src="assets/DOKUM 15.jpg" alt="Pengujian KLOTERAL" class="w-full h-full object-cover opacity-70 group-hover:opacity-90 group-hover:scale-105 transition-all duration-500" loading="lazy"><div class="absolute inset-0 bg-gradient-to-t from-surface-primary/80 via-transparent to-transparent"></div><div class="absolute bottom-4 left-4 right-4"><span class="text-xs font-mono text-white/50">02</span><p class="text-sm font-medium text-white mt-1">Pengujian Lapangan</p></div></div></div>
+                <div class="reveal reveal-d3 glass-card rounded-2xl overflow-hidden group"><div class="aspect-[4/3] bg-surface-elevated relative overflow-hidden"><img src="assets/DOKUM 7.jpg" alt="Tampilan OLED" class="w-full h-full object-cover opacity-70 group-hover:opacity-90 group-hover:scale-105 transition-all duration-500" loading="lazy"><div class="absolute inset-0 bg-gradient-to-t from-surface-primary/80 via-transparent to-transparent"></div><div class="absolute bottom-4 left-4 right-4"><span class="text-xs font-mono text-white/50">03</span><p class="text-sm font-medium text-white mt-1">Tampilan OLED Real-time</p></div></div></div>
+            </div>
+            <p class="reveal text-center text-xs text-white/30 mt-6">* Foto di atas adalah placeholder. Foto asli prototipe akan menggantikan gambar ini.</p>
+        </div>
+    </section>
+    <div class="section-divider"></div>
+
+    <!-- KONTAK -->
+    <section id="kontak" class="relative py-24 lg:py-32 overflow-hidden">
+        <div class="absolute inset-0" style="background: radial-gradient(ellipse 60% 40% at 50% 100%, rgba(16,185,129,0.08), transparent);"></div>
+        <div class="absolute inset-0 opacity-[0.015]" style="background-image: url('https://grainy-gradients.vercel.app/noise.svg');"></div>
+        <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16 reveal"><div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-brand-green/20 bg-brand-green/5 mb-4"><i data-lucide="send" class="w-3.5 h-3.5 text-brand-green"></i><span class="text-xs font-medium text-brand-green/80 tracking-wide uppercase">Kontak</span></div><h2 class="text-3xl sm:text-4xl font-semibold tracking-tight mb-4">Tertarik Berkolaborasi <span class="gradient-text-green">dengan KLOTERAL</span>?</h2><p class="text-white/50 max-w-2xl mx-auto leading-relaxed">Kami terbuka untuk kerja sama, pertanyaan teknis, peliputan media, atau dukungan pengembangan produk.</p></div>
+            <div class="grid lg:grid-cols-5 gap-8 lg:gap-12 max-w-6xl mx-auto">
+                <div class="lg:col-span-2 reveal reveal-d1">
+                    <div class="space-y-6">
+                        <div class="glass-card rounded-xl p-5"><div class="flex items-start gap-4"><div class="w-10 h-10 rounded-lg bg-brand-green/10 flex items-center justify-center shrink-0"><i data-lucide="mail" class="w-5 h-5 text-brand-green"></i></div><div><h4 class="text-sm font-medium text-white mb-1">Email</h4><p class="text-sm text-white/50">tim@kloteral.id</p></div></div></div>
+                        <div class="glass-card rounded-xl p-5"><div class="flex items-start gap-4"><div class="w-10 h-10 rounded-lg bg-brand-blue/10 flex items-center justify-center shrink-0"><i data-lucide="users" class="w-5 h-5 text-brand-blue"></i></div><div><h4 class="text-sm font-medium text-white mb-1">Tim KLOTERAL</h4><p class="text-sm text-white/50">Tim peneliti & pengembang inovasi keselamatan jalan</p></div></div></div>
+                        <div class="glass-card rounded-xl p-5"><div class="flex items-start gap-4"><div class="w-10 h-10 rounded-lg bg-brand-yellow/10 flex items-center justify-center shrink-0"><i data-lucide="clock" class="w-5 h-5 text-brand-yellow"></i></div><div><h4 class="text-sm font-medium text-white mb-1">Respons Time</h4><p class="text-sm text-white/50">Kami akan merespons dalam 1–3 hari kerja</p></div></div></div>
+                    </div>
+                    <div class="mt-8 p-5 rounded-xl border border-brand-green/10 bg-brand-green/[0.03]"><p class="text-sm text-white/60 leading-relaxed italic">"Peringatan dini yang menyelamatkan nyawa — data akurat untuk kebijakan yang tepat — terjangkau, tapi berdampak besar."</p><p class="text-xs text-white/30 mt-2">— Tim KLOTERAL</p></div>
+                </div>
+                <div class="lg:col-span-3 reveal reveal-d2">
+                    <form id="contact-form" class="glass-card rounded-2xl p-6 lg:p-8 space-y-5" novalidate>
+                        <div class="hp-field"><label for="hp-website">Website</label><input type="text" id="hp-website" name="website" tabindex="-1" autocomplete="off"></div>
+                        <div class="grid sm:grid-cols-2 gap-5"><div><label for="nama" class="block text-xs font-medium text-white/60 mb-2">Nama Lengkap <span class="text-brand-red">*</span></label><input type="text" id="nama" name="nama" class="form-input" placeholder="Masukkan nama Anda" required><p class="error-msg" id="nama-error">Nama wajib diisi</p></div><div><label for="instansi" class="block text-xs font-medium text-white/60 mb-2">Instansi / Organisasi</label><input type="text" id="instansi" name="instansi" class="form-input" placeholder="Contoh: Dinas PU Bandung"></div></div>
+                        <div class="grid sm:grid-cols-2 gap-5"><div><label for="email" class="block text-xs font-medium text-white/60 mb-2">Email <span class="text-brand-red">*</span></label><input type="email" id="email" name="email" class="form-input" placeholder="nama@email.com" required><p class="error-msg" id="email-error">Masukkan alamat email yang valid</p></div><div><label for="telepon" class="block text-xs font-medium text-white/60 mb-2">No. HP / WhatsApp</label><input type="tel" id="telepon" name="telepon" class="form-input" placeholder="08xxxxxxxxxx"></div></div>
+                        <div><label for="keperluan" class="block text-xs font-medium text-white/60 mb-2">Keperluan <span class="text-brand-red">*</span></label><select id="keperluan" name="keperluan" class="form-input" required style="appearance:none;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22rgba(255,255,255,0.4)%22 stroke-width=%222%22><polyline points=%226 9 12 15 18 9%22/></svg>');background-repeat:no-repeat;background-position:right 14px center;"><option value="" disabled selected>Pilih keperluan Anda</option><option value="kerja-sama">Kerja Sama / Kolaborasi</option><option value="pertanyaan">Pertanyaan Teknis</option><option value="media">Peliputan Media / Pers</option><option value="investasi">Investasi / Komersialisasi</option><option value="lainnya">Lainnya</option></select><p class="error-msg" id="keperluan-error">Silakan pilih keperluan</p></div>
+                        <div><label for="pesan" class="block text-xs font-medium text-white/60 mb-2">Pesan <span class="text-brand-red">*</span></label><textarea id="pesan" name="pesan" rows="4" class="form-input resize-none" placeholder="Tuliskan pesan atau pertanyaan Anda..." required></textarea><p class="error-msg" id="pesan-error">Pesan wajib diisi (min. 10 karakter)</p></div>
+                        <button type="submit" id="submit-btn" class="w-full flex items-center justify-center gap-2 px-6 py-3.5 bg-brand-green text-white font-medium rounded-xl hover:bg-emerald-400 transition-all duration-300" style="box-shadow: 0 4px 20px rgba(16,185,129,0.35);"><i data-lucide="send" class="w-4 h-4"></i><span id="submit-text">Kirim Pesan</span></button>
+                        <p class="text-[11px] text-white/25 text-center">Dengan mengirim form ini, Anda menyetujui bahwa data akan digunakan untuk keperluan respons terkait KLOTERAL.</p>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </section>
+    <div class="section-divider"></div>
+
+    <!-- FOOTER -->
+    <footer class="relative py-16 lg:py-20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid md:grid-cols-3 gap-10 mb-12">
+                <div><div class="flex items-center gap-2.5 mb-4"><div class="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-green to-brand-cyan flex items-center justify-center"><i data-lucide="triangle" class="w-4 h-4 text-white"></i></div><span class="text-lg font-semibold tracking-tight">KLOTERAL</span></div><p class="text-sm text-white/40 leading-relaxed max-w-xs">Satu alat, solusi lengkap — inklinometer digital terintegrasi untuk keselamatan jalan pegunungan Indonesia.</p></div>
+                <div><h4 class="text-xs font-semibold text-white/40 uppercase tracking-wider mb-4">Navigasi</h4><ul class="space-y-2"><li><a href="#tentang" class="text-sm text-white/40 hover:text-white transition-colors">Tentang</a></li><li><a href="#cara-kerja" class="text-sm text-white/40 hover:text-white transition-colors">Cara Kerja</a></li><li><a href="#manfaat" class="text-sm text-white/40 hover:text-white transition-colors">Manfaat</a></li><li><a href="#spesifikasi" class="text-sm text-white/40 hover:text-white transition-colors">Spesifikasi</a></li><li><a href="#roadmap" class="text-sm text-white/40 hover:text-white transition-colors">Roadmap</a></li><li><a href="#kontak" class="text-sm text-white/40 hover:text-white transition-colors">Kontak</a></li></ul></div>
+                <div><h4 class="text-xs font-semibold text-white/40 uppercase tracking-wider mb-4">Informasi</h4><ul class="space-y-2"><li class="text-sm text-white/40">Tim KLOTERAL</li><li class="text-sm text-white/40">Inovasi Keselamatan Jalan</li><li class="text-sm text-white/40">Berdasarkan Arduino UNO R3</li></ul><div class="flex items-center gap-3 mt-6"><a href="#" class="w-9 h-9 rounded-lg bg-white/5 border border-white/8 flex items-center justify-center hover:bg-white/10 hover:border-white/15 transition-all" aria-label="GitHub"><i data-lucide="github" class="w-4 h-4 text-white/40"></i></a><a href="#" class="w-9 h-9 rounded-lg bg-white/5 border border-white/8 flex items-center justify-center hover:bg-white/10 hover:border-white/15 transition-all" aria-label="Instagram"><i data-lucide="instagram" class="w-4 h-4 text-white/40"></i></a><a href="mailto:tim@kloteral.id" class="w-9 h-9 rounded-lg bg-white/5 border border-white/8 flex items-center justify-center hover:bg-white/10 hover:border-white/15 transition-all" aria-label="Email"><i data-lucide="mail" class="w-4 h-4 text-white/40"></i></a></div></div>
+            </div>
+            <div class="pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4"><p class="text-xs text-white/25">&copy; 2026 KLOTERAL. Hak cipta dilindungi.</p><p class="text-xs text-white/25">Dibuat dengan <span class="text-brand-green/50">♥</span> untuk keselamatan jalan Indonesia</p></div>
+        </div>
+    </footer>
+
+    <!-- Toast -->
+    <div id="toast" class="toast toast-success"><div class="flex items-center gap-3"><i data-lucide="check-circle" class="w-5 h-5 shrink-0"></i><span id="toast-message">Pesan berhasil dikirim!</span></div></div>
+
+    <script>
+        lucide.createIcons();
+
+        // ===== Mobile Menu =====
+        const mobileToggle = document.getElementById('mobile-toggle');
+        const mobileMenu = document.getElementById('mobile-menu');
+        const menuIcon = document.getElementById('menu-icon');
+        let menuOpen = false;
+        mobileToggle.addEventListener('click', () => {
+            menuOpen = !menuOpen;
+            mobileMenu.classList.toggle('open', menuOpen);
+            menuIcon.setAttribute('data-lucide', menuOpen ? 'x' : 'menu');
+            lucide.createIcons();
+        });
+        document.querySelectorAll('.mobile-link').forEach(l => l.addEventListener('click', () => {
+            menuOpen = false; mobileMenu.classList.remove('open');
+            menuIcon.setAttribute('data-lucide', 'menu'); lucide.createIcons();
+        }));
+
+        // ===== Navbar scroll =====
+        window.addEventListener('scroll', () => {
+            document.getElementById('navbar').style.background = window.scrollY > 100 ? 'rgba(11,12,16,0.95)' : 'rgba(11,12,16,0.8)';
+        });
+
+        // ===== Scroll Reveal =====
+        const revealObserver = new IntersectionObserver((entries) => {
+            entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+        }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+        document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+        // ===== Benefits Tabs =====
+        const tabs = document.querySelectorAll('.benefit-tab');
+        const contents = document.querySelectorAll('.benefit-content');
+        tabs.forEach(tab => {
+            if (!tab.classList.contains('active')) { tab.style.background = 'rgba(255,255,255,0.03)'; tab.style.borderColor = 'rgba(255,255,255,0.08)'; tab.style.color = 'rgba(255,255,255,0.5)'; }
+            else { tab.style.background = 'rgba(16,185,129,0.1)'; tab.style.borderColor = 'rgba(16,185,129,0.25)'; tab.style.color = '#10B981'; }
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => { t.classList.remove('active'); t.style.background = 'rgba(255,255,255,0.03)'; t.style.borderColor = 'rgba(255,255,255,0.08)'; t.style.color = 'rgba(255,255,255,0.5)'; });
+                tab.classList.add('active'); tab.style.background = 'rgba(16,185,129,0.1)'; tab.style.borderColor = 'rgba(16,185,129,0.25)'; tab.style.color = '#10B981';
+                contents.forEach(c => c.classList.add('hidden'));
+                const tc = document.getElementById(`tab-${tab.dataset.tab}`); tc.classList.remove('hidden');
+                tc.querySelectorAll('.reveal').forEach(el => { el.classList.remove('visible'); setTimeout(() => el.classList.add('visible'), 50); });
+            });
+        });
+
+        // ===== ANGLE SIMULATION — TILTS LEFT & RIGHT =====
+        const angleDisplay = document.getElementById('angle-display');
+        const angleBadge = document.getElementById('angle-badge');
+        const statusDisplay = document.getElementById('status-display');
+        const deviceTilt = document.getElementById('device-tilt');
+        const ledGreen = document.getElementById('led-green');
+        const ledYellow = document.getElementById('led-yellow');
+        const ledRed = document.getElementById('led-red');
+        const indLedGreen = document.getElementById('ind-led-green');
+        const indLedYellow = document.getElementById('ind-led-yellow');
+        const indLedRed = document.getElementById('ind-led-red');
+        const directionArrow = document.getElementById('direction-arrow');
+        const arcPath = document.getElementById('arc-path');
+        const arcLabel = document.getElementById('arc-label');
+
+        // Sequence: positive = tilt right, negative = tilt left
+        const angleSequence = [
+            // Start gentle right
+            3.5, 5.2, 6.8, 7.5, 8.5, 10.0, 11.5, 10.2, 12.5, 14.0,
+            // Go to red right
+            16.5, 18.0, 19.5, 17.0, 20.5, 18.5,
+            // Come back through yellow to center
+            15.0, 12.0, 9.5, 7.0, 4.0, 1.5, 0.5,
+            // Go LEFT (negative) — gentle
+            -2.0, -4.5, -6.0, -7.5, -9.0, -10.5, -8.5, -11.0,
+            // Yellow left
+            -12.5, -13.8, -11.5, -14.0,
+            // Red left
+            -16.0, -18.5, -20.0, -17.5, -21.0, -19.0, -16.5,
+            // Come back from left
+            -14.0, -11.0, -8.0, -5.0, -3.0, -1.0, 0.5,
+            // Right again
+            4.0, 7.5, 10.0, 13.0, 15.5, 18.0, 16.0, 12.0, 8.0, 4.0,
+            // Left again
+            -3.0, -7.0, -11.0, -14.5, -17.0, -13.0, -9.0, -5.0, -2.0, 1.0,
+            // Gentle oscillation
+            3.0, -3.0, 5.5, -5.5, 8.0, -8.0, 11.0, -11.0, 6.0, -6.0, 2.0, -2.0, 0.5,
+        ];
+        let seqIndex = 0;
+
+        function getLedState(absAngle) {
+            if (absAngle <= 8) return 'green';
+            if (absAngle <= 15) return 'yellow';
+            return 'red';
+        }
+        function getStatusText(state) {
+            return state === 'green' ? '✓ Aman – Kemiringan Rendah' : state === 'yellow' ? '⚠ Waspada – Kemiringan Sedang' : '✕ Bahaya – Kemiringan Tajam';
+        }
+        function getStatusColor(state) {
+            return state === 'green' ? '#10B981' : state === 'yellow' ? '#F59E0B' : '#EF4444';
+        }
+
+        // Draw SVG arc for angle visualization
+        function drawArc(angleDeg) {
+            const r = 35; // radius
+            const cx = 40, cy = 0; // center at bottom-center of SVG
+            const rad = (angleDeg * Math.PI) / 180;
+            const absRad = Math.abs(rad);
+            const x = cx + r * Math.sin(rad);
+            const y = cy + r * Math.cos(rad);
+            const largeArc = absRad > Math.PI ? 1 : 0;
+            const sweep = angleDeg >= 0 ? 1 : 0;
+            const d = `M ${cx} ${cy} L ${cx} ${cy - r} A ${r} ${r} 0 ${largeArc} ${sweep} ${x} ${y}`;
+            arcPath.setAttribute('d', d);
+            arcLabel.textContent = Math.abs(angleDeg).toFixed(1) + '°';
+        }
+
+        function updateDevice() {
+            const baseAngle = angleSequence[seqIndex % angleSequence.length];
+            const angle = baseAngle + (Math.random() * 0.4 - 0.2);
+            const clampedAngle = Math.max(-25, Math.min(25, angle));
+            seqIndex++;
+
+            const absAngle = Math.abs(clampedAngle);
+            const state = getLedState(absAngle);
+            const color = getStatusColor(state);
+
+            // OLED display — show absolute value with direction arrow
+            angleDisplay.textContent = absAngle.toFixed(1) + '°';
+            angleDisplay.style.color = color;
+
+            // Direction arrow
+            if (absAngle < 0.5) {
+                directionArrow.textContent = '—';
+                directionArrow.style.color = color;
+                directionArrow.style.transform = 'rotate(0deg)';
+            } else if (clampedAngle > 0) {
+                directionArrow.textContent = '↗';
+                directionArrow.style.color = color;
+                directionArrow.style.transform = 'rotate(0deg)';
+            } else {
+                directionArrow.textContent = '↖';
+                directionArrow.style.color = color;
+                directionArrow.style.transform = 'scaleX(-1)';
+            }
+
+            // Badge
+            angleBadge.textContent = absAngle.toFixed(1) + '°';
+            angleBadge.style.color = color;
+
+            // Status
+            statusDisplay.textContent = getStatusText(state);
+            statusDisplay.style.color = color;
+
+            // Tilt device — positive = clockwise (right), negative = counter-clockwise (left)
+            const visualTilt = clampedAngle * 1.1; // slightly amplified for visual clarity
+            deviceTilt.style.transform = `rotate(${visualTilt}deg)`;
+
+            // Draw arc
+            drawArc(clampedAngle);
+
+            // LED circles
+            ledGreen.className = 'led-circle ' + (state === 'green' ? 'on-green' : 'off');
+            ledYellow.className = 'led-circle ' + (state === 'yellow' ? 'on-yellow' : 'off');
+            ledRed.className = 'led-circle ' + (state === 'red' ? 'on-red' : 'off');
+
+            // LED indicator bars
+            indLedGreen.className = 'led-indicator-bar w-full mb-3 ' + (state === 'green' ? 'on-green' : 'off');
+            indLedYellow.className = 'led-indicator-bar w-full mb-3 ' + (state === 'yellow' ? 'on-yellow' : 'off');
+            indLedRed.className = 'led-indicator-bar w-full mb-3 ' + (state === 'red' ? 'on-red' : 'off');
+        }
+
+        updateDevice();
+        setInterval(updateDevice, 1500);
+
+        // ===== Form Handling =====
+        const form = document.getElementById('contact-form');
+        const submitBtn = document.getElementById('submit-btn');
+        const submitText = document.getElementById('submit-text');
+        function showError(id) { const f = document.getElementById(id); const e = document.getElementById(id + '-error'); if (f) f.classList.add('error'); if (e) e.classList.add('show'); }
+        function clearError(id) { const f = document.getElementById(id); const e = document.getElementById(id + '-error'); if (f) f.classList.remove('error'); if (e) e.classList.remove('show'); }
+        ['nama', 'email', 'keperluan', 'pesan'].forEach(id => { const el = document.getElementById(id); if (el) { el.addEventListener('input', () => clearError(id)); el.addEventListener('change', () => clearError(id)); } });
+        function showToast(msg, type = 'success') { const t = document.getElementById('toast'); const m = document.getElementById('toast-message'); t.className = `toast toast-${type}`; m.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 4000); }
+        form.addEventListener('submit', (e) => {
+            e.preventDefault(); if (document.getElementById('hp-website').value) return;
+            let v = true;
+            const nama = document.getElementById('nama').value.trim(), email = document.getElementById('email').value.trim(), keperluan = document.getElementById('keperluan').value, pesan = document.getElementById('pesan').value.trim();
+            if (!nama) { showError('nama'); v = false; } else clearError('nama');
+            if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showError('email'); v = false; } else clearError('email');
+            if (!keperluan) { showError('keperluan'); v = false; } else clearError('keperluan');
+            if (!pesan || pesan.length < 10) { showError('pesan'); v = false; } else clearError('pesan');
+            if (!v) { showToast('Mohon lengkapi semua field yang wajib diisi.', 'error'); return; }
+            submitBtn.disabled = true; submitText.textContent = 'Mengirim...'; submitBtn.style.opacity = '0.7';
+            setTimeout(() => { showToast('Pesan berhasil dikirim! Tim KLOTERAL akan segera menghubungi Anda.', 'success'); form.reset(); submitBtn.disabled = false; submitText.textContent = 'Kirim Pesan'; submitBtn.style.opacity = '1'; ['nama', 'email', 'keperluan', 'pesan'].forEach(clearError); }, 1500);
+        });
+
+        // ===== Smooth scroll =====
+        document.querySelectorAll('a[href^="#"]').forEach(a => { a.addEventListener('click', function(e) { e.preventDefault(); const t = document.querySelector(this.getAttribute('href')); if (t) window.scrollTo({ top: t.getBoundingClientRect().top + window.scrollY - 80, behavior: 'smooth' }); }); });
+
+        // ===== Active nav =====
+        const sections = document.querySelectorAll('section[id]');
+        window.addEventListener('scroll', () => {
+            let cur = ''; sections.forEach(s => { if (window.scrollY >= s.offsetTop - 120) cur = s.id; });
+            document.querySelectorAll('.nav-link').forEach(l => { l.classList.remove('text-white'); l.classList.add('text-white/60'); if (l.getAttribute('href') === `#${cur}`) { l.classList.add('text-white'); l.classList.remove('text-white/60'); } });
+        });
+    </script>
+</body>
+</html>
